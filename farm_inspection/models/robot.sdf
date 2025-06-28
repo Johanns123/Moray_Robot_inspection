@@ -65,14 +65,14 @@
                 </visual>
             </link>
         </model>
-        <model name='vehicle_blue' canonical_link='chassis'>
-            <pose relative_to='world'>0 0 0 0 0 0</pose>
+        <model name='vehicle_blue' canonical_link='base_link'>
+            <pose relative_to='world'>0.5 0.2 0 0 0 0</pose>
 
-            <frame name="lidar_frame" attached_to='chassis'>
+            <frame name="lidar_frame" attached_to='base_link'>
                 <pose>0.8 0 0.5 0 0 0</pose>
             </frame>
 
-            <link name='chassis'>
+            <link name='base_link'>
                 <pose relative_to='__model__'>0.5 0 0.2 0 0 0</pose>
                     <inertial> <!--inertial properties of the link mass, inertia matix-->
                         <mass>1.14395</mass>
@@ -143,7 +143,7 @@
                 </link>
 
                 <link name="camera_link">
-                    <pose relative_to='chassis'>0.8 0.0 0.2 0 0 0</pose>
+                    <pose relative_to='base_link'>0.8 0.0 0.2 0 0 0</pose>
                     <inertial>
                         <mass>0.1</mass>
                         <inertia>
@@ -188,12 +188,12 @@
                 </link>
 
                 <joint name='camera' type='fixed'>
-                    <parent>chassis</parent>
+                    <parent>base_link</parent>
                     <child>camera_link</child>
                 </joint>
 
                 <link name='left_wheel1'>
-                    <pose relative_to="chassis">-0.4 0.46 -0.05 -1.5707 0 0</pose>
+                    <pose relative_to="base_link">-0.4 0.46 -0.05 -1.5707 0 0</pose>
                     <inertial>
                         <mass>1</mass>
                         <inertia>
@@ -230,7 +230,7 @@
 
                 <!--The same as left wheel but with different position-->
                 <link name='right_wheel1'>
-                    <pose relative_to="chassis">-0.4 -0.46 -0.05 -1.5707 0 0</pose> <!--angles are in radian-->
+                    <pose relative_to="base_link">-0.4 -0.46 -0.05 -1.5707 0 0</pose> <!--angles are in radian-->
                     <inertial>
                         <mass>1</mass>
                         <inertia>
@@ -266,7 +266,7 @@
                 </link>
 
                 <link name='right_wheel2'>
-                    <pose relative_to="chassis">0.4 -0.46 -0.05 -1.5707 0 0</pose> <!--angles are in radian-->
+                    <pose relative_to="base_link">0.4 -0.46 -0.05 -1.5707 0 0</pose> <!--angles are in radian-->
                     <inertial>
                         <mass>1</mass>
                         <inertia>
@@ -302,7 +302,7 @@
                 </link>
 
                 <link name='left_wheel2'>
-                    <pose relative_to="chassis">0.4 0.46 -0.05 -1.5707 0 0</pose> <!--angles are in radian-->
+                    <pose relative_to="base_link">0.4 0.46 -0.05 -1.5707 0 0</pose> <!--angles are in radian-->
                     <inertial>
                         <mass>1</mass>
                         <inertia>
@@ -339,7 +339,7 @@
 
                 <joint name='left_wheel1_joint' type='revolute'>
                     <pose relative_to='left_wheel1'/>
-                    <parent>chassis</parent>
+                    <parent>base_link</parent>
                     <child>left_wheel1</child>
                     <axis>
                         <xyz expressed_in='__model__'>0 1 0</xyz> <!--can be defined as any frame or even arbitrary frames-->
@@ -352,7 +352,7 @@
 
                 <joint name='left_wheel2_joint' type='revolute'>
                     <pose relative_to='left_wheel2'/>
-                    <parent>chassis</parent>
+                    <parent>base_link</parent>
                     <child>left_wheel2</child>
                     <axis>
                         <xyz expressed_in='__model__'>0 1 0</xyz> <!--can be defined as any frame or even arbitrary frames-->
@@ -365,7 +365,7 @@
 
                 <joint name='right_wheel1_joint' type='revolute'>
                     <pose relative_to='right_wheel1'/>
-                    <parent>chassis</parent>
+                    <parent>base_link</parent>
                     <child>right_wheel1</child>
                     <axis>
                         <xyz expressed_in='__model__'>0 1 0</xyz>
@@ -378,7 +378,7 @@
 
                 <joint name='right_wheel2_joint' type='revolute'>
                     <pose relative_to='right_wheel2'/>
-                    <parent>chassis</parent>
+                    <parent>base_link</parent>
                     <child>right_wheel2</child>
                     <axis>
                         <xyz expressed_in='__model__'>0 1 0</xyz>
@@ -402,7 +402,7 @@
 		    <topic>cmd_vel</topic>
 		    <odom_topic>odom</odom_topic>
 		    <odom_frame>odom</odom_frame>
-		    <base_frame>chassis</base_frame> <!-- ou base_link, se for seu frame principal -->
+		    <base_link>base_link</base_link>
 		    <publish_tf>true</publish_tf>
 		</plugin>
 

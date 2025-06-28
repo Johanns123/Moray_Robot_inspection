@@ -16,6 +16,9 @@ def generate_launch_description():
     lidar_node_path = os.path.join(pkg_share, 'scripts', 'build', 'lidar_node')
     lidar_node_cwd = os.path.join(pkg_share, 'scripts', 'build')
 
+    # Caminho do arquivo de parâmetros Nav2
+    nav2_params_file = os.path.join(pkg_share, 'config', 'nav2_params.yaml')
+    
     # Processo para iniciar o Gazebo
     gazebo = ExecuteProcess(
         cmd=['ign', 'gazebo', sdf_path, '--verbose'],
@@ -84,7 +87,37 @@ def generate_launch_description():
         remappings=[('/model/vehicle_blue/tf_static', '/tf_static')],
         output='screen'
     )
+    
+    static_tf_odom = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['0', '0', '0', '0', '0', '0', 'odom', 'vehicle_blue/odom'],
+        output='screen'
+    )
 
+    # Static TF: vehicle_blue/base_link -> base_link
+    static_tf_base_link = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['0', '0', '0', '0', '0', '0', 'vehicle_blue/base_link', 'base_link'],
+        output='screen'
+    )
+
+    static_tf_map = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
+        output='screen'
+    )
+    
+     # Nav2 bringup node com parâmetro
+    nav2_bringup = Node(
+        package='nav2_bringup',
+        executable='nav2_bringup',
+        name='nav2_bringup',
+        output='screen',
+        parameters=[nav2_params_file]
+    )
     
     return LaunchDescription([
         gazebo,
@@ -94,5 +127,10 @@ def generate_launch_description():
         bridge_lidar,
         bridge_camera_image,
         bridge_odom,
+        bridge_vehicle_tf,
+        bridge_vehicle_tf_static,
+        static_tf_odom,
+    	static_tf_base_link,
+    	static_tf_map,
     ])
 
