@@ -10,7 +10,7 @@ def generate_launch_description():
     pkg_share = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     
     # Caminho do arquivo SDF
-    sdf_path = os.path.join(pkg_share, 'models', 'building_robot.sdf')
+    sdf_path = os.path.join(pkg_share, 'models', 'robot.sdf')
 
     # Caminho do executável lidar_node
     lidar_node_path = os.path.join(pkg_share, 'scripts', 'build', 'lidar_node')
@@ -49,16 +49,42 @@ def generate_launch_description():
     bridge_lidar = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=['/lidar_distance@std_msgs/msg/Float64@ignition.msgs.Double'],
+        arguments=['/scan@std_msgs/msg/Float64@ignition.msgs.Double'],
         output='screen'
     )
 
+    # Bridge camera
     bridge_camera_image = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
         arguments=['/camera@sensor_msgs/msg/Image@ignition.msgs.Image'],
         output='screen'
     )
+
+    # Bridge odom
+    bridge_odom = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=['/odom@nav_msgs/msg/Odometry@ignition.msgs.Odometry'],
+        output='screen'
+    )
+    
+    bridge_vehicle_tf = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=['/model/vehicle_blue/tf@tf2_msgs/msg/TFMessage@ignition.msgs.Pose_V'],
+        remappings=[('/model/vehicle_blue/tf', '/tf')],
+        output='screen'
+    )
+
+    bridge_vehicle_tf_static = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=['/model/vehicle_blue/tf_static@tf2_msgs/msg/TFMessage@ignition.msgs.Pose_V'],
+        remappings=[('/model/vehicle_blue/tf_static', '/tf_static')],
+        output='screen'
+    )
+
     
     return LaunchDescription([
         gazebo,
@@ -67,5 +93,6 @@ def generate_launch_description():
         bridge_imu,
         bridge_lidar,
         bridge_camera_image,
+        bridge_odom,
     ])
 

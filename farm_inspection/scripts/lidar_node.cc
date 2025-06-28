@@ -28,7 +28,7 @@ void cb(const ignition::msgs::LaserScan &_msg)
 int main(int argc, char **argv)
 {
   std::string topic_sub = "/lidar";           // Tópico de entrada (dados do LIDAR)
-  std::string topic_pub = "/lidar_distance";  // Tópico de saída (menor distância)
+  std::string topic_pub = "/scan";  // Tópico de saída (menor distância)
 
   // Criar publisher
   pub = node.Advertise<ignition::msgs::Double>(topic_pub);

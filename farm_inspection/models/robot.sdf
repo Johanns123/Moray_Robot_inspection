@@ -390,17 +390,22 @@
                 </joint>
 
                 <plugin
-                    filename="libignition-gazebo-diff-drive-system.so"
-                    name="ignition::gazebo::systems::DiffDrive">
-                    <left_joint>left_wheel1_joint</left_joint>
-                    <left_joint>left_wheel2_joint</left_joint>
-                    <right_joint>right_wheel1_joint</right_joint>
-                    <right_joint>right_wheel2_joint</right_joint>
-                    <wheel_separation>0.92</wheel_separation>
-                    <wheel_radius>0.15</wheel_radius>
-                    <odom_publish_frequency>1</odom_publish_frequency>
-                    <topic>cmd_vel</topic>
-                </plugin>
+    		    filename="libignition-gazebo-diff-drive-system.so"
+    		    name="ignition::gazebo::systems::DiffDrive">
+    		    <left_joint>left_wheel1_joint</left_joint>
+		    <left_joint>left_wheel2_joint</left_joint>
+		    <right_joint>right_wheel1_joint</right_joint>
+		    <right_joint>right_wheel2_joint</right_joint>
+		    <wheel_separation>0.92</wheel_separation>
+		    <wheel_radius>0.15</wheel_radius>
+		    <odom_publish_frequency>30</odom_publish_frequency>
+		    <topic>cmd_vel</topic>
+		    <odom_topic>odom</odom_topic>
+		    <odom_frame>odom</odom_frame>
+		    <base_frame>chassis</base_frame> <!-- ou base_link, se for seu frame principal -->
+		    <publish_tf>true</publish_tf>
+		</plugin>
+
             </model>
 
             <model name='wall'>
