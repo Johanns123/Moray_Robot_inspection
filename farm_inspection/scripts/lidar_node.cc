@@ -1,47 +1,47 @@
 #include <ignition/msgs/laserscan.pb.h>
 #include <ignition/msgs/double.pb.h>
 #include <ignition/transport/Node.hh>
-#include <limits>
+#include <numeric>  // std::accumulate
 
 ignition::transport::Node node;
-ignition::transport::Node::Publisher pub;
+ignition::transport::Node::Publisher pubScan;
+ignition::transport::Node::Publisher pubLinear;
 
-//////////////////////////////////////////////////
-/// \brief Callback para lidar com dados do LIDAR e publicar a menor distância.
 void cb(const ignition::msgs::LaserScan &_msg)
 {
-  double minDistance = std::numeric_limits<double>::infinity();
+  // Publica o scan completo
+  pubScan.Publish(_msg);
 
+  // Calcula a média das distâncias válidas
+  double sum = 0.0;
+  int count = 0;
   for (int i = 0; i < _msg.ranges_size(); ++i)
   {
-    double range = _msg.ranges(i);
-    if (range < minDistance)
-      minDistance = range;
+    double val = _msg.ranges(i);
+    if (std::isfinite(val)) {
+      sum += val;
+      ++count;
+    }
   }
 
-  ignition::msgs::Double distanceMsg;
-  distanceMsg.set_data(minDistance);
-  pub.Publish(distanceMsg);
+  double avg = (count > 0) ? sum / count : 0.0;
+  ignition::msgs::Double avgMsg;
+  avgMsg.set_data(avg);
+  pubLinear.Publish(avgMsg);
 }
 
-//////////////////////////////////////////////////
 int main(int argc, char **argv)
 {
-  std::string topic_sub = "/lidar";           // Tópico de entrada (dados do LIDAR)
-  std::string topic_pub = "/scan";  // Tópico de saída (menor distância)
+  pubScan = node.Advertise<ignition::msgs::LaserScan>("/scan");
+  pubLinear = node.Advertise<ignition::msgs::Double>("/scan/linear");
 
-  // Criar publisher
-  pub = node.Advertise<ignition::msgs::Double>(topic_pub);
-
-  // Inscrever no tópico do LIDAR
-  if (!node.Subscribe(topic_sub, cb))
+  if (!node.Subscribe("/lidar", cb))
   {
-    std::cerr << "Erro ao se inscrever no tópico [" << topic_sub << "]" << std::endl;
+    std::cerr << "Erro ao se inscrever em /lidar" << std::endl;
     return -1;
   }
 
-  // Mantém o processo ativo
   ignition::transport::waitForShutdown();
-
   return 0;
 }
+

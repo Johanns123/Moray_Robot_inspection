@@ -10,7 +10,7 @@ def generate_launch_description():
     pkg_share = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     
     # Caminho do arquivo SDF
-    sdf_path = os.path.join(pkg_share, 'models', 'robot.sdf')
+    sdf_path = os.path.join(pkg_share, 'world', 'forest.sdf')
 
     # Caminho do executável lidar_node
     lidar_node_path = os.path.join(pkg_share, 'scripts', 'build', 'lidar_node')
@@ -48,11 +48,19 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Bridge lidar_distance
+    # Bridge lidar 2-D view
     bridge_lidar = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=['/scan@std_msgs/msg/Float64@ignition.msgs.Double'],
+        arguments=['/scan@sensor_msgs/msg/LaserScan@ignition.msgs.LaserScan'],
+        output='screen'
+    )
+    
+    # Bridge lidar_distance - 1D
+    bridge_lidar_avg = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=['/scan/linear@std_msgs/msg/Float64@ignition.msgs.Double'],
         output='screen'
     )
 
@@ -125,6 +133,7 @@ def generate_launch_description():
         bridge_cmd_vel,
         bridge_imu,
         bridge_lidar,
+        bridge_lidar_avg,
         bridge_camera_image,
         bridge_odom,
         bridge_vehicle_tf,
