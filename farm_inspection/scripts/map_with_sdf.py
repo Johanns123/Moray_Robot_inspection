@@ -54,7 +54,7 @@ plt.show()
 # Parâmetros
 resolucao = 0.5         # metros por célula
 valor_obstaculo = 1000  # pontuação máxima
-alcance = 0.5          # raio de influência do obstáculo em metros
+alcance = 1          # raio de influência do obstáculo em metros
 
 # Define os limites do mapa
 margin = 1  # margem extra em metros

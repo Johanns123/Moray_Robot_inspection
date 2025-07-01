@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, Imu
 from cv_bridge import CvBridge
 import cv2
 from nav_msgs.msg import Odometry
@@ -11,112 +11,16 @@ import math
 from scipy.spatial.transform import Rotation as R
 
 # Constants
-LIMIT_ANGULAR_SPEED = 1.0
+LIMIT_ANGULAR_SPEED = 0.8
 LIMIT_LINEAR_SPEED = 0.5
 
+VIDEO_FILENAME = 'output_video.mp4'
+VIDEO_FPS = 10
+VIDEO_SIZE = (800, 600)
 
 def euler_from_quaternion(quat):
     r = R.from_quat([quat[0], quat[1], quat[2], quat[3]])
     return r.as_euler('xyz', degrees=False)
-
-
-class RobotController(Node):
-    def __init__(self):
-        super().__init__('robot_controller')
-        self.velocity_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        self.image_sub = self.create_subscription(Image, '/camera', self.image_callback, 10)
-
-        self.initial_pose_offset = (-10.0, 0.0)  # ajuste conforme posição inicial do robô
-        self.initial_orientation_offset = 0.0
-
-        self.bridge = CvBridge()
-        self.current_pose = None
-        self.destinations = [(0.0, 0.0), (-1.0, 0.0)]
-        self.destination_index = 0
-        self.desired_phi = 0.0
-        self.previous_x = 0
-        self.previous_y = 0
-        self.angular_error_k1 = 0
-        self.distance_error_k1 = 0
-        self.uk_ang_k1 = 0
-        self.uk_disp_k1 = 0
-        self.counter = 0
-
-        self.timer = self.create_timer(0.1, self.move_robot)
-
-    def image_callback(self, msg):
-        try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            resized_image = cv2.resize(cv_image, (800, 600))
-            cv2.imshow("Camera View", resized_image)
-            cv2.waitKey(1)
-        except Exception as e:
-            self.get_logger().error(f"Failed to convert image: {e}")
-
-    def odom_callback(self, msg):
-        odom_x = msg.pose.pose.position.x
-        odom_y = msg.pose.pose.position.y
-
-        orientation_q = msg.pose.pose.orientation
-        orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
-        (_, _, yaw) = euler_from_quaternion(orientation_list)
-
-        # Transformação para coordenadas globais considerando offset e orientação
-        cos_yaw = math.cos(yaw)
-        sin_yaw = math.sin(yaw)
-
-        global_x = self.initial_pose_offset[0] + (odom_x * cos_yaw - odom_y * sin_yaw)
-        global_y = self.initial_pose_offset[1] + (odom_x * sin_yaw + odom_y * cos_yaw)
-
-        self.current_pose = (global_x, global_y, yaw)
-
-    def move_robot(self):
-        if self.current_pose is not None and self.destination_index < len(self.destinations):
-            curr_x, curr_y, phi = self.current_pose
-            goal_x, goal_y = self.destinations[self.destination_index]
-
-            u_x = goal_x - curr_x
-            u_y = goal_y - curr_y
-
-            self.desired_phi = math.atan2(u_y, u_x)
-            angular_error = math.atan2(math.sin(self.desired_phi - phi), math.cos(self.desired_phi - phi))
-            distance_error = math.hypot(u_x, u_y)
-
-            uk_ang = 1.4939 * angular_error - 1.442808 * self.angular_error_k1 + self.uk_ang_k1
-            uk_disp = 2.8154 * distance_error - 2.719113 * self.distance_error_k1 + self.uk_disp_k1
-
-            uk_ang = max(min(uk_ang, LIMIT_ANGULAR_SPEED), -LIMIT_ANGULAR_SPEED)
-            uk_disp = max(min(uk_disp, 0.5 if abs(angular_error) > 0.03 else 1.8), -0.5)
-
-            self.angular_error_k1 = angular_error
-            self.distance_error_k1 = distance_error
-            self.uk_ang_k1 = uk_ang
-            self.uk_disp_k1 = uk_disp
-
-            twist = Twist()
-
-            if abs(angular_error) > math.radians(2):
-                twist.linear.x = 0.0
-                twist.angular.z = uk_ang
-            else:
-                twist.linear.x = uk_disp
-                twist.angular.z = uk_ang
-
-            if distance_error <= 0.1:
-                self.velocity_pub.publish(Twist())
-                self.get_logger().info('Reached target position.')
-                self.get_logger().info(f"Final position: x={curr_x:.2f}, y={curr_y:.2f}, phi={phi:.2f}")
-                self.destination_index += 1
-                return
-
-            #self.velocity_pub.publish(twist)
-
-            if self.counter < 10:
-                self.counter += 1
-            else:
-                self.get_logger().info(f"Current pose: x={curr_x:.2f}, y={curr_y:.2f}, phi={phi:.2f}")
-                self.counter = 0
 
 
 def read_map(filename):
@@ -156,7 +60,7 @@ def a_star(map_data, start, goal):
                     came_from[neighbor] = current
 
     if goal not in came_from:
-        return None, float('inf')
+        return []
 
     path = []
     current = goal
@@ -166,7 +70,7 @@ def a_star(map_data, start, goal):
     path.append(start)
     path.reverse()
 
-    return path, cost_so_far[goal]
+    return path
 
 
 def simplify_path(path):
@@ -186,17 +90,151 @@ def simplify_path(path):
     return simplified
 
 
+class RobotController(Node):
+    def __init__(self):
+        super().__init__('robot_controller')
+        self.velocity_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+        self.imu_sub = self.create_subscription(Imu, '/imu', self.imu_callback, 10)
+        self.image_sub = self.create_subscription(Image, '/camera', self.image_callback, 10)
+
+        self.bridge = CvBridge()
+        #self.video_writer = cv2.VideoWriter(VIDEO_FILENAME, cv2.VideoWriter_fourcc(*'mp4v'), VIDEO_FPS, VIDEO_SIZE)
+
+        self.initial_pose_offset = (-10.0, 0.0)
+        self.current_pose = (self.initial_pose_offset[0], self.initial_pose_offset[1], 0.0)
+        self.prev_time = None
+
+        self.kp_dist = 0.8
+        self.ki_dist = 0.0
+        self.kd_dist = 0.0
+        self.previous_dist_error = 0.0
+
+        self.kp_ang = 0.8
+        self.ki_ang = 0.0
+        self.kd_ang = 0.0
+        self.previous_ang_error = 0.0
+        self.TS = 0.1
+
+        self.destinations = []
+        self.destination_index = 0
+        self.counter = 0
+
+        self.map_data = read_map("mapa_potencial.txt")
+        self.center = (len(self.map_data[0]) // 2, len(self.map_data) // 2)
+
+        waypoints = [(6, 0), (6, -4), (-6, -4), (-6, -7), (6, -7), (-10, 0)]
+        self.build_path_sequence(waypoints)
+
+        self.timer = self.create_timer(0.1, self.move_robot)
+
+    def build_path_sequence(self, waypoints):
+        self.destinations = []
+        current = waypoints[0]
+        for next_wp in waypoints[1:]:
+            start_map = (int(self.center[1] - current[1]), int(self.center[0] + current[0]))
+            goal_map = (int(self.center[1] - next_wp[1]), int(self.center[0] + next_wp[0]))
+            path = a_star(self.map_data, start_map, goal_map)
+            real_path = [(col - self.center[0], self.center[1] - row) for row, col in path]
+            self.destinations.extend(real_path[1:])  # skip current pos repeated
+            current = next_wp
+
+    def image_callback(self, msg):
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            resized_image = cv2.resize(cv_image, (800, 600))
+            cv2.imshow("Camera View", resized_image)
+            cv2.waitKey(1)
+        except Exception as e:
+            self.get_logger().error(f"Failed to convert image: {e}")
+
+    def imu_callback(self, msg):
+        orientation_q = msg.orientation
+        orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
+        (_, _, yaw) = euler_from_quaternion(orientation_list)
+
+        now = self.get_clock().now()
+        if self.prev_time is None:
+            self.prev_time = now
+            return
+
+        dt = (now - self.prev_time).nanoseconds * 1e-9
+        self.prev_time = now
+
+        v = getattr(self, 'last_linear_x', 0.0)
+        x, y, _ = self.current_pose
+        x += v * math.cos(yaw) * dt
+        y += v * math.sin(yaw) * dt
+
+        self.current_pose = (x, y, yaw)
+
+    def odom_callback(self, msg):
+        self.last_linear_x = msg.twist.twist.linear.x
+
+    def move_robot(self):
+        if self.current_pose is not None and self.destination_index < len(self.destinations):
+            curr_x, curr_y, phi = self.current_pose
+            goal_x, goal_y = self.destinations[self.destination_index]
+
+            u_x = goal_x - curr_x
+            u_y = goal_y - curr_y
+
+            desired_phi = math.atan2(u_y, u_x)
+            angular_error = math.atan2(math.sin(desired_phi - phi), math.cos(desired_phi - phi))
+            distance_error = math.hypot(u_x, u_y)
+
+            P_dist = distance_error * self.kp_dist
+            D_dist = (distance_error - self.previous_dist_error) * self.kd_dist / self.TS
+            I_dist = distance_error * self.ki_dist * self.TS
+            self.previous_dist_error = distance_error
+
+            P_ang = angular_error * self.kp_ang
+            D_ang = (angular_error - self.previous_ang_error) * self.kd_ang / self.TS
+            I_ang = angular_error * self.ki_ang * self.TS
+            self.previous_ang_error = angular_error
+
+            uk_disp = max(min(P_dist + I_dist + D_dist, LIMIT_LINEAR_SPEED), -LIMIT_LINEAR_SPEED)
+            uk_ang = max(min(P_ang + I_ang + D_ang, LIMIT_ANGULAR_SPEED), -LIMIT_ANGULAR_SPEED)
+
+            twist = Twist()
+            if distance_error <= 0.1:
+                self.velocity_pub.publish(Twist())
+                self.get_logger().info(f"Reached point ({goal_x:.2f}, {goal_y:.2f})")
+                self.destination_index += 1
+
+                if self.destination_index >= len(self.destinations):
+                    self.get_logger().info("Final destination reached. Saving video...")
+                    #self.video_writer.release()
+                    cv2.destroyAllWindows()
+
+                return
+
+            if abs(angular_error) > math.radians(5):
+                twist.linear.x = 0.0
+                twist.angular.z = uk_ang
+            else:
+                twist.linear.x = uk_disp
+                twist.angular.z = uk_ang
+
+            self.velocity_pub.publish(twist)
+
+            if self.counter < 10:
+                self.counter += 1
+            else:
+                self.get_logger().info(f"Current pose: x={curr_x:.2f}, y={curr_y:.2f}, phi={phi:.2f}")
+                self.counter = 0
+
+
 def main(args=None):
     rclpy.init(args=args)
     controller = RobotController()
-
-    controller.destinations = [(4, 0), (4, -4), (-3, -4), (-3, -7), (6, -7), (-10, 0)]
 
     try:
         rclpy.spin(controller)
     except KeyboardInterrupt:
         pass
     finally:
+        controller.video_writer.release()
         controller.destroy_node()
         rclpy.shutdown()
         cv2.destroyAllWindows()
@@ -204,15 +242,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
-
-##coordinates
-'''
-[-1,0]
-[7,0]
-[6,-4]
-[-3,-4]
-[-3,-7]
-[6,-7]
-[-10, 0]
-'''
