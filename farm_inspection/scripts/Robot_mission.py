@@ -18,24 +18,23 @@ VIDEO_FILENAME = 'output_video.mp4'
 VIDEO_FPS = 10
 VIDEO_SIZE = (800, 600)
 
+OBSTACLE_THRESHOLD = 1000.0  # Considera valores maiores como obstáculos intransponíveis
+
 def euler_from_quaternion(quat):
     r = R.from_quat([quat[0], quat[1], quat[2], quat[3]])
     return r.as_euler('xyz', degrees=False)
-
 
 def read_map(filename):
     with open(filename, 'r') as f:
         lines = f.readlines()
         return [list(map(float, line.strip().split())) for line in lines]
 
-
 def heuristic(a, b):
     return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
 
-
 def a_star(map_data, start, goal):
     rows, cols = len(map_data), len(map_data[0])
-    moves = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+    moves = [(0, 1), (1, 0), (0, -1), (-1, 0)]  # sem diagonais
 
     frontier = [(0, start)]
     came_from = {start: None}
@@ -51,7 +50,12 @@ def a_star(map_data, start, goal):
             neighbor = (current[0] + dx, current[1] + dy)
 
             if 0 <= neighbor[0] < rows and 0 <= neighbor[1] < cols:
-                new_cost = cost_so_far[current] + map_data[int(neighbor[0])][int(neighbor[1])]
+                cell_cost = map_data[neighbor[0]][neighbor[1]]
+                if cell_cost >= OBSTACLE_THRESHOLD:
+                    continue  # Ignora obstáculos
+
+                move_cost = 1.0  # custo unitário para movimento direto
+                new_cost = cost_so_far[current] + move_cost + cell_cost
 
                 if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
                     cost_so_far[neighbor] = new_cost
@@ -72,7 +76,6 @@ def a_star(map_data, start, goal):
 
     return path
 
-
 def simplify_path(path):
     if not path:
         return []
@@ -89,7 +92,6 @@ def simplify_path(path):
     simplified.append(path[-1])
     return simplified
 
-
 class RobotController(Node):
     def __init__(self):
         super().__init__('robot_controller')
@@ -99,7 +101,7 @@ class RobotController(Node):
         self.image_sub = self.create_subscription(Image, '/camera', self.image_callback, 10)
 
         self.bridge = CvBridge()
-        #self.video_writer = cv2.VideoWriter(VIDEO_FILENAME, cv2.VideoWriter_fourcc(*'mp4v'), VIDEO_FPS, VIDEO_SIZE)
+        self.video_writer = cv2.VideoWriter(VIDEO_FILENAME, cv2.VideoWriter_fourcc(*'mp4v'), VIDEO_FPS, VIDEO_SIZE)
 
         self.initial_pose_offset = (-10.0, 0.0)
         self.current_pose = (self.initial_pose_offset[0], self.initial_pose_offset[1], 0.0)
@@ -123,7 +125,7 @@ class RobotController(Node):
         self.map_data = read_map("mapa_potencial.txt")
         self.center = (len(self.map_data[0]) // 2, len(self.map_data) // 2)
 
-        waypoints = [(6, 0), (6, -4), (-6, -4), (-6, -7), (6, -7), (-10, 0)]
+        waypoints = [(6, 0), (6, -4), (-4, -4), (-4, -7), (4, -7), (-10, 0)]
         self.build_path_sequence(waypoints)
 
         self.timer = self.create_timer(0.1, self.move_robot)
@@ -144,6 +146,7 @@ class RobotController(Node):
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             resized_image = cv2.resize(cv_image, (800, 600))
             cv2.imshow("Camera View", resized_image)
+            self.video_writer.write(resized_image)
             cv2.waitKey(1)
         except Exception as e:
             self.get_logger().error(f"Failed to convert image: {e}")
@@ -204,8 +207,10 @@ class RobotController(Node):
 
                 if self.destination_index >= len(self.destinations):
                     self.get_logger().info("Final destination reached. Saving video...")
-                    #self.video_writer.release()
+                    self.video_writer.release()
                     cv2.destroyAllWindows()
+                    self.finished = False
+                    return
 
                 return
 
@@ -224,7 +229,6 @@ class RobotController(Node):
                 self.get_logger().info(f"Current pose: x={curr_x:.2f}, y={curr_y:.2f}, phi={phi:.2f}")
                 self.counter = 0
 
-
 def main(args=None):
     rclpy.init(args=args)
     controller = RobotController()
@@ -238,7 +242,6 @@ def main(args=None):
         controller.destroy_node()
         rclpy.shutdown()
         cv2.destroyAllWindows()
-
 
 if __name__ == '__main__':
     main()
